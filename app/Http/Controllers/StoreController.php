@@ -2,34 +2,46 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Branch;
+use Exception;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class StoreController extends Controller
 {
     //
     public function Stores_list(Request $request){
-        $customerLat = $request->input('customer_lat');
-        $customerLng = $request->input('customer_lng');
+        try{
+            //assign values in variable
+            $customerLat = $request->customer_lat;
+            $customerLng = $request->customer_lng;
 
-        $branches = Branch::with(['store'])->get();
-        // $points =
+            //quesry to find nearest branch to customer
 
+            $branches_nearest = DB::table('store_branches')
+                    ->join('stores','stores.id','=','store_branches.store_id')
+                    ->join('stores_categories','stores_categories.id','=','stores.category_id')
+                    ->select('stores_categories.name_' . $request->header('lang') . ' as category_name',
+                                'stores.name_' . $request->header('lang') . ' as store_name',
+                                'store_branches.name_' . $request->header('lang') . ' as branch_name',
+                                'stores.logo',
+                                DB::raw("6731 * acos(cos(radians(" . $customerLat . "))
+                                    * cos(radians(store_branches.lat))
+                                    * cos(radians(store_branches.lng)) - radians(". $customerLng .")
+                                    + sin(radians(store_branches.lat))
+                                    * sin(radians(store_branches.lat))) as distance"))
+                    ->orderBy('distance')
+                    ->get();
 
-        $data = [];
-        foreach ($branches as $branch) {
-                $data = [
-                    'store_name' => $branch->store->{"name_" . $request->header('lang')},
-                    'category_name' => $branch->store->category->{"name_" . $request->header('lang')},
-                    'logo' => asset('images/'.$branch->store->logo),
-                    'branch_name' => $branch->{"name_" . $request->header('lang')},
-                ];
+            return response()->json([
+                'status' => 'success',
+                'data' => $branches_nearest,
+            ]);
+        }catch(Exception $e){
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+            ]);
         }
-
-        return response()->json([
-            'status' => 'success',
-            'data' => $data,
-        ]);
     }
 
 }
